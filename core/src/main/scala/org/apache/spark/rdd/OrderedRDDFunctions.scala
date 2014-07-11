@@ -67,4 +67,41 @@ class OrderedRDDFunctions[K : Ordering : ClassTag,
       }
     }, preservesPartitioning = true)
   }
+
+  /**
+   * Returns an RDD with any elements not in the inclusive range `lower` to `upper` filtered out.
+   * If the RDD has been partitioned using the `RangePartitioner` this is an operation that can be
+   * done efficiently. If not a standard `filter` is used.
+   */
+  def filterByRange(lower: K, upper: K) : RDD[P] = {
+
+    def rangeFilter(iter:Iterator[P]) = {
+      for {
+        (k, v) <- iter
+        if ordering.gteq(k, lower) && ordering.lteq(k, upper)
+      } yield (k, v).asInstanceOf[P]
+    }
+
+    val partitionIndicies =
+      self.partitioner match {
+        case Some(p) => {
+          p match {
+            case rp: RangePartitioner[K, V] => {
+              (rp.getPartition(lower), rp.getPartition(upper)) match {
+                case (l, u) if l <= u => l to u
+                case (l, u) if l > u => u to l
+              }
+            }
+            case _ => {
+              0 until p.numPartitions
+            }
+          }
+        }
+        case None => {
+          return self.mapPartitions(rangeFilter)
+        }
+      }
+    val prunedRdd = PartitionPruningRDD.create(self, partitionIndicies.contains)
+    prunedRdd.mapPartitions(rangeFilter)
+  }
 }

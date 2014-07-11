@@ -120,5 +120,19 @@ class SortingSuite extends FunSuite with SharedSparkContext with Matchers with L
     partitions(1).last should be > partitions(2).head
     partitions(2).last should be > partitions(3).head
   }
+
+  test("get a range of elements in a sorted RDD that is on one partition") {
+    val pairArr = (1 to 1000).map(x => (x, x)).toArray
+    val sorted = sc.parallelize(pairArr, 10).sortByKey()
+    val range = sorted.filterByRange(20, 40).collect()
+    assert((20 to 40).toArray.deep == range.map(_._1).deep)
+  }
+
+  test("get a range of elements over multiple partitions in a descendingly sorted RDD") {
+    val pairArr = (1000 to 1 by -1).map(x => (x, x)).toArray
+    val sorted = sc.parallelize(pairArr, 10).sortByKey(false)
+    val range = sorted.filterByRange(200, 800).collect()
+    assert((800 to 200 by -1).toArray.deep == range.map(_._1).deep)
+  }
 }
 
